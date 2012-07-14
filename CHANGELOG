@@ -1,5 +1,6 @@
 * 1.9.1 (2012-XX-XX)
 
+ * added Twig_Loader_Filesystem::prependPath()
  * made Twig_Loader_Chain more explicit about problems
 
 * 1.9.0 (2012-07-13)
