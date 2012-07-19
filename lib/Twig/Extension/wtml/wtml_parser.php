@@ -1,23 +1,5 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <?php
-error_reporting(E_ALL);
-ini_set('display_errors', 'On');
 
-function dump($arr){
-?>
-	<pre>
-<?
-	echo htmlspecialchars(print_r($arr, true));
-	
-?>
-	</pre>
-<?
-}
-
-function printElapsed($clock){
-	$elapsed = (microtime(true)-$clock)/1000;
-	echo "time elapsed is ".$elapsed."ms <br />";
-}
 
 function parseWTML($filename){
 	
@@ -42,82 +24,46 @@ function parseWTML($filename){
 	
 	$finalRegex = "/($twigBlock)|($htmlComment)|($selectorRegex)|($nestingGrammar)/s";
 
-/* echo "<h1>Comments stripped</h1>"; */
-/* echo nl2br($template); */
+	preg_match_all($finalRegex, $template, $matches);
 
 
+	$regexBlocks = array(
+						1=>'twig_block',
+						2=>'html_comment',
+						3=>'selector',
+						9=>'nesting_grammar'
+					);
 
-/*
-?>
-	<h2>Split</h2>
-<?
-*/
+	$selectorRegexes = array (
+		'content'	=>	"/\(\".*?\"\)/s",
+		'attr'	=>	"/\[.*?\]/",
+		'id'	=>	"/#.*?(?![a-zA-Z0-9_-])/",
+		'class'	=>	"/\..*?(?![a-zA-Z0-9_-])/",
+		'tag'	=>	"/[a-z0-9]+/"
+	);
 
-
-/* echo "selector regex: ".htmlspecialchars($selectorRegex); */
-/* echo "final regex: ".htmlspecialchars($finalRegex); */
-
-preg_match_all($finalRegex, $template, $matches);
-
-/* $matches = preg_split("/($selectorRegex)/s", $template, null, PREG_SPLIT_DELIM_CAPTURE|PREG_SPLIT_NO_EMPTY); */
-
-/* printElapsed($clock); */
-
-
-
-$regexBlocks = array(
-				1=>'twig_block',
-				2=>'html_comment',
-				3=>'selector',
-				9=>'nesting_grammar'
-				);
-				
-/*
-$selectorRegexes = array (
-	'text'	=>	"\([\"\'].*?[\'\"]\)",
-	'attr'	=>	"\[.*?\]",
-	'id'	=>	"#.*?(?=[\.#\[$])",
-	'class'	=>	"\..*?(?=[\.#\[$])",
-	'tag'	=>	"[a-z0-9]+"
-);
-*/
-
-$selectorRegexes = array (
-	'content'	=>	"/\(\".*?\"\)/s",
-	'attr'	=>	"/\[.*?\]/",
-	'id'	=>	"/#.*?(?![a-zA-Z0-9_-])/",
-	'class'	=>	"/\..*?(?![a-zA-Z0-9_-])/",
-	'tag'	=>	"/[a-z0-9]+/"
-);
-
-foreach($matches[0] as $key => $match){
-	foreach($regexBlocks as $i=>$instruction){
-		if (strlen($matches[$i][$key])>0){
-			if($i==3){ //selector
-				$selectorArray = array(); //initialise and unset
-				$line = $match;
-				
-/* 				$selectorArray['_line'] = $line; */
-				foreach($selectorRegexes as $name=>$regex){
-					$line = preg_replace_callback("$regex", function($match) use($name, &$selectorArray){
-						$selectorArray[$name][] = $match[0];
-						return '';
-					}, $line);
+	foreach($matches[0] as $key => $match){
+		foreach($regexBlocks as $i=>$instruction){
+			if (strlen($matches[$i][$key])>0){
+				if($i==3){ //selector
+					$selectorArray = array(); //initialise and unset
+					$line = $match;
+					
+					foreach($selectorRegexes as $name=>$regex){
+						$line = preg_replace_callback("$regex", function($match) use($name, &$selectorArray){
+							$selectorArray[$name][] = $match[0];
+							return '';
+						}, $line);
+					}
+					
+					$instructions[][$instruction] = $selectorArray;
+					
+				}else{
+					$instructions[][$instruction] = $match;
 				}
-				
-/* 				$selectorArray['~end_line'] = $line; */
-				
-				$instructions[][$instruction] = $selectorArray;
-				
-			}else{
-				$instructions[][$instruction] = $match;
 			}
 		}
 	}
-}
-
-/* dump($matches); */
-/* dump($instructions); */
 
 $tagBuffer = array();
 $htmlArray = array();
@@ -137,10 +83,6 @@ foreach($instructions as $key => $instructionArray){
 	$offsetArray[] = $insertOffset;
 	
 	$instruction = key($instructionArray);
-/* 	echo "instruction is: ".$instruction; */
-/* 	dump($instructionArray); */
-
-	
 
 	switch($instruction){
 		case 'selector':
@@ -156,14 +98,9 @@ foreach($instructions as $key => $instructionArray){
 			if ($selfClosing)	$tagComponents[] = "/";
 			
 			$openingTag = "<".implode(' ', $tagComponents).">";
-/* 			$htmlArray[] = $openingTag; */
-/* 			addItem($openingTag, $insertOffset, $htmlArray); */
-			
-/* 			if (isset($instructionArray['selector']['content']))	$htmlArray[] = preg_replace("/^\(\"|\"\)$/", '', $instructionArray['selector']['content'][0]); */
 			$tagContent = '';
 			if (isset($instructionArray['selector']['content']))	$tagContent = preg_replace("/^\(\"|\"\)$/", '', $instructionArray['selector']['content'][0]);
-/* 			$htmlArray[] = $instructionArray['selector']['tag'][0]; */
-		
+			
 			addItem($openingTag.$tagContent, $insertOffset, $htmlArray);
 		
 			if (!$selfClosing)	addItem("</".$htmlTag.">", $insertOffset, $htmlArray); //if item needs a closure
@@ -173,18 +110,15 @@ foreach($instructions as $key => $instructionArray){
 		case 'twig_block':
 		{
 			addItem($instructionArray['twig_block'], $insertOffset, $htmlArray);
-/* 			echo "twig block added:"; */
 		}
 		break;
 		case 'html_comment':
 		{
 			addItem($instructionArray['html_comment'], $insertOffset, $htmlArray);
-/* 			echo "html comment added:"; */
 		}
 		break;
 		case 'nesting_grammar':
 		{
-/* 			$htmlArray[] = $instructionArray['nesting_grammar'][0]; */
 			
 			switch($instructionArray['nesting_grammar'][0]){
 				case '{':
@@ -213,21 +147,9 @@ foreach($instructions as $key => $instructionArray){
 	}
 }
 
-/* printElapsed($clock); */
-
-
-/* dump($htmlArray); */
-/* dump($offsetArray); */
-
-
-/* echo "<pre>".htmlspecialchars(implode('', $htmlArray))."</pre>"; */
-
 return implode('', $htmlArray);
 
 } //end function
-
-
-
 
 
 
